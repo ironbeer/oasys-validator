@@ -23,15 +23,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/forkid"13.15
+	
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
 const (
-	ETH66 = 66
-	ETH67 = 67
 	ETH68 = 68
 )
 
@@ -41,11 +40,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH68, ETH67, ETH66}
+var ProtocolVersions = []uint{ETH68}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH68: 17, ETH67: 17, ETH66: 17}
+var protocolLengths = map[uint]uint64{ETH68: 17}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -304,11 +303,8 @@ type ReceiptsRLPPacket struct {
 	ReceiptsRLPResponse
 }
 
-// NewPooledTransactionHashesPacket67 represents a transaction announcement packet on eth/67.
-type NewPooledTransactionHashesPacket67 []common.Hash
-
-// NewPooledTransactionHashesPacket68 represents a transaction announcement packet on eth/68 and newer.
-type NewPooledTransactionHashesPacket68 struct {
+// NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.
+type NewPooledTransactionHashesPacket struct {
 	Types  []byte
 	Sizes  []uint32
 	Hashes []common.Hash
@@ -367,10 +363,8 @@ func (*BlockBodiesResponse) Kind() byte   { return BlockBodiesMsg }
 func (*NewBlockPacket) Name() string { return "NewBlock" }
 func (*NewBlockPacket) Kind() byte   { return NewBlockMsg }
 
-func (*NewPooledTransactionHashesPacket67) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket67) Kind() byte   { return NewPooledTransactionHashesMsg }
-func (*NewPooledTransactionHashesPacket68) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket68) Kind() byte   { return NewPooledTransactionHashesMsg }
+func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }
 
 func (*GetPooledTransactionsRequest) Name() string { return "GetPooledTransactions" }
 func (*GetPooledTransactionsRequest) Kind() byte   { return GetPooledTransactionsMsg }
