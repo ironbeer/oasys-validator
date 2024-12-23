@@ -28,13 +28,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache Docker Layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx
-          restore-keys: ${{ runner.os }}-buildx-
-
       - name: Build and Push
         uses: docker/bake-action@v4
         env:
@@ -48,8 +41,8 @@ jobs:
           push: true
           set: |
             *.platform=linux/amd64,linux/arm64
-            *.cache-from=type=local,src=/tmp/.buildx-cache
-            *.cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
             binaries.output=type=local,dest=./binaries
 
       - name: Check version label
