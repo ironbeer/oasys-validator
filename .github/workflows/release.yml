@@ -28,6 +28,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Create binaries directory
+        run: mkdir ./binaries
+
       - name: Build and Push
         uses: docker/bake-action@v4
         env:
@@ -43,15 +46,15 @@ jobs:
             *.platform=linux/amd64,linux/arm64
             *.cache-from=type=gha
             *.cache-to=type=gha,mode=max
-            binaries.output=type=local,dest=/tmp
+            binaries.output=type=local,dest=./binaries
 
       - name: Check version label
-        run: '/tmp/linux_amd64/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
+        run: 'binaries/linux_amd64/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
 
       - name: Compress Binaries
         run: |
-          (cd /tmp/linux_amd64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-amd64.zip 
-          (cd /tmp/linux_arm64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-arm64.zip
+          (cd binaries/linux_amd64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-amd64.zip 
+          (cd binaries/linux_arm64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-arm64.zip
 
       - name: Create genesis.zip
         run: zip -r genesis.zip genesis
