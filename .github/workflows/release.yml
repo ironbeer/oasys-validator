@@ -65,8 +65,6 @@ jobs:
           push: true
           set: |
             *.platform=linux/amd64,linux/arm64
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
             binaries.output=type=local,dest=./binaries
 
       - name: Check version label
