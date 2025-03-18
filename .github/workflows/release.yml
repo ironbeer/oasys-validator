@@ -31,13 +31,13 @@ jobs:
       - name: Cleanup
         run: |
           echo "Disk space before cleanup:"; df -h
-          rm -rf /usr/share/dotnet; df -h
-          rm -rf /usr/local/lib/android; df -h
-          rm -rf /opt/ghc; df -h
-          rm -rf /opt/hostedtoolcache/CodeQL; df -h
-          apt-get clean; df -h
-          apt-get autoremove -y; df -h
-          docker system prune -af; df -h
+          sudo rm -rf /usr/share/dotnet; df -h
+          sudo rm -rf /usr/local/lib/android; df -h
+          sudo rm -rf /opt/ghc; df -h
+          sudo rm -rf /opt/hostedtoolcache/CodeQL; df -h
+          sudo apt-get clean; df -h
+          sudo apt-get autoremove -y; df -h
+          sudo docker system prune -af; df -h
 
       - name: Create binaries directory
         run: mkdir ./binaries
