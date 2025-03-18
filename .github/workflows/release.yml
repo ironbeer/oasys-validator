@@ -28,6 +28,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: debug 1
+        run: pwd
+
+      - name: debug 2
+        run: df -h
+
+      - name: debug 3
+        run: du -hcs *
+
+      - name: debug 4
+        run: du -hcs /home/runner/runners/*
+
       - name: Create binaries directory
         run: mkdir ./binaries
 
