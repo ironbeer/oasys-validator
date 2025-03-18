@@ -40,6 +40,12 @@ jobs:
       - name: debug 4
         run: du -hcs /home/runner/runners/*
 
+      - name: debug 5
+        run: ls -la /home/runner/runners/2.322.0
+
+      - name: debug 6
+        run: du -hcs /home/runner/runners/2.322.0/*
+
       - name: Create binaries directory
         run: mkdir ./binaries
 
