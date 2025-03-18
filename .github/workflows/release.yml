@@ -28,26 +28,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: debug 1
-        run: pwd
+      - name: Free disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
 
-      - name: debug 2
-        run: df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
 
-      - name: debug 3
-        run: du -hcs *
+          sudo apt-get clean
+          sudo apt-get autoremove -y
 
-      - name: debug 4
-        run: du -hcs /home/runner/runners/*
+          docker system prune -af
 
-      - name: debug 5
-        run: ls -la /home/runner/runners/2.322.0
-
-      - name: debug 6
-        run: du -hcs /home/runner/runners/2.322.0/*
-
-      - name: debug 7
-        run: df -h /home/runner/runners/2.322.0
+          echo "Disk space after cleanup:"
+          df -h
 
       - name: Create binaries directory
         run: mkdir ./binaries
@@ -64,7 +61,9 @@ jobs:
           files: docker-bake.hcl
           push: true
           set: |
-            *.platform=linux/amd64
+            *.platform=linux/amd64,linux/arm64
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
             binaries.output=type=local,dest=./binaries
 
       - name: Check version label
@@ -73,6 +72,7 @@ jobs:
       - name: Compress Binaries
         run: |
           (cd binaries/linux_amd64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-amd64.zip
+          (cd binaries/linux_arm64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-arm64.zip
 
       - name: Create genesis.zip
         run: zip -r genesis.zip genesis
