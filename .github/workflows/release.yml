@@ -28,23 +28,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Free disk space
+      - name: Cleanup
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-
-          sudo apt-get clean
-          sudo apt-get autoremove -y
-
-          docker system prune -af
-
-          echo "Disk space after cleanup:"
-          df -h
+          echo "Disk space before cleanup:"; df -h
+          rm -rf /usr/share/dotnet; df -h
+          rm -rf /usr/local/lib/android; df -h
+          rm -rf /opt/ghc; df -h
+          rm -rf /opt/hostedtoolcache/CodeQL; df -h
+          apt-get clean; df -h
+          apt-get autoremove -y; df -h
+          docker system prune -af; df -h
 
       - name: Create binaries directory
         run: mkdir ./binaries
