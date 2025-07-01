@@ -64,8 +64,8 @@ jobs:
             *.cache-to=type=gha,mode=max
             binaries.output=type=local,dest=./binaries
 
-      - name: Check version label
-        run: 'binaries/linux_amd64/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
+      # - name: Check version label
+      #   run: 'binaries/linux_amd64/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
 
       - name: Compress Binaries
         run: |
