@@ -43,7 +43,7 @@ const (
 
 	// Note: checkpointInterval must be able to divide by epoch period.
 	// 5760 / 1440 = 4, 14400(SHORT_BLOCK_TIME_EPOCH_PERIOD) / 1440 = 10
-	checkpointIntervalV2 = 1440 // Number of blocks after which to save the vote snapshot to the database
+	checkpointIntervalV2 = 1024 // Number of blocks after which to save the vote snapshot to the database
 	inmemorySnapshots    = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures   = 4096 // Number of recent block signatures to keep in memory
 
@@ -1449,6 +1449,7 @@ func (c *Oasys) getNextValidators(chain consensus.ChainHeaderReader, header *typ
 		if fromHeader && c.chainConfig.IsFastFinalityEnabled(header.Number) {
 			if validators, err = getValidatorsFromHeader(header); err != nil {
 				log.Warn("failed to get validators from header", "in", "getNextValidators", "hash", header.Hash(), "number", number, "err", err)
+				return
 			}
 		}
 		// If not fast finality or failed to get validators from header
@@ -1601,6 +1602,7 @@ func (c *Oasys) environment(chain consensus.ChainHeaderReader, header *types.Hea
 		if fromHeader && chain.Config().IsFastFinalityEnabled(header.Number) {
 			if env, err = getEnvironmentFromHeader(header); err != nil {
 				log.Warn("failed to get environment value from header", "in", "environment", "hash", header.Hash(), "number", number, "err", err)
+				return nil, err
 			}
 		}
 		// If not fast finality or failed to get environment from header
