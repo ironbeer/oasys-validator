@@ -48,6 +48,7 @@ target "binaries" {
   target = "binaries"
   context = "."
   args = {
+    COMMIT = "${GIT_COMMIT}"
     VERSION = "${GIT_VERSION}"
   }
   platforms = split(",", PLATFORMS)
@@ -58,6 +59,7 @@ target "plugin-binaries" {
   target = "plugin-binaries"
   context = "."
   args = {
+    COMMIT = "${GIT_COMMIT}"
     VERSION = "${GIT_VERSION}"
   }
   platforms = split(",", PLATFORMS)
