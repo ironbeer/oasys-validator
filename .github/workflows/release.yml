@@ -8,8 +8,16 @@ on:
 
 jobs:
   build:
-    name: Build
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       id-token: write
       packages: write
@@ -36,13 +44,17 @@ jobs:
         with:
           submodules: true
 
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
+        if: startsWith(github.ref_name, 'v')
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -60,49 +72,47 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           GIT_COMMIT: ${{ github.sha }}
           GIT_VERSION: ${{ github.ref_name }}
-          IMAGE_TAGS: ${{ github.ref_name }}
+          IMAGE_TAGS: "${{ github.ref_name }}-${{ matrix.arch }}"
         with:
           files: docker-bake.hcl
           targets: geth,binaries
           push: true
           set: |
-            *.platform=linux/amd64,linux/arm64
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+            *.cache-from=type=gha,scope=${{ matrix.arch }}
+            *.cache-to=type=gha,scope=${{ matrix.arch }},mode=max
             binaries.output=type=local,dest=./binaries
 
       - name: Build plugin only
         if: "!startsWith(github.ref_name, 'v')"
         uses: docker/bake-action@v6
         env:
+          GIT_COMMIT: ${{ github.sha }}
           GIT_VERSION: ${{ github.ref_name }}
         with:
           files: docker-bake.hcl
           targets: plugin-binaries
           set: |
-            *.platform=linux/amd64,linux/arm64
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+            *.cache-from=type=gha,scope=${{ matrix.arch }}
+            *.cache-to=type=gha,scope=${{ matrix.arch }},mode=max
             plugin-binaries.output=type=local,dest=./binaries
 
       # --- geth artifacts (v* only) ---
 
       - name: Check version label
         if: startsWith(github.ref_name, 'v')
-        run: 'binaries/linux_amd64/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
+        run: 'binaries/geth version | grep -q "Version: $(echo ${{ github.ref_name }} | cut -c 2-10)"'
 
-      - name: Compress geth binaries
+      - name: Compress geth binary
         if: startsWith(github.ref_name, 'v')
         run: |
-          (cd binaries/linux_amd64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-amd64.zip
-          (cd binaries/linux_arm64 && zip -q - geth) > geth-${{ github.ref_name }}-linux-arm64.zip
+          (cd binaries && zip -q - geth) > geth-${{ github.ref_name }}-linux-${{ matrix.arch }}.zip
 
       - name: Create genesis.zip
-        if: startsWith(github.ref_name, 'v')
+        if: startsWith(github.ref_name, 'v') && matrix.arch == 'amd64'
         run: zip -r genesis.zip genesis
 
       - name: Create setup.sh
-        if: startsWith(github.ref_name, 'v')
+        if: startsWith(github.ref_name, 'v') && matrix.arch == 'amd64'
         run: |
           sed -e 's#__REPOSITORY__#${{ github.repository }}#' .github/setup_template.sh | \
           sed -e 's#__RELEASE__#${{ github.ref_name }}#' > setup.sh
@@ -115,65 +125,82 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign plugin (amd64)
+      - name: Rename plugin binary to match CDN naming convention
+        run: |
+          mv binaries/suspicious_txfilter.so binaries/suspicious_txfilter_linux_${{ matrix.arch }}.so
+
+      - name: Sign plugin
         run: |
           cosign sign-blob --yes --new-bundle-format \
-            --bundle binaries/linux_amd64/suspicious_txfilter.so.bundle \
-            binaries/linux_amd64/suspicious_txfilter.so
+            --bundle binaries/suspicious_txfilter_linux_${{ matrix.arch }}.so.bundle \
+            binaries/suspicious_txfilter_linux_${{ matrix.arch }}.so
 
-      - name: Sign plugin (arm64)
-        run: |
-          cosign sign-blob --yes --new-bundle-format \
-            --bundle binaries/linux_arm64/suspicious_txfilter.so.bundle \
-            binaries/linux_arm64/suspicious_txfilter.so
-
-      - name: Create plugin metadata (amd64)
+      - name: Create plugin metadata
         run: |
           go run txfilter/cmd/createmeta/metadata_creator.go \
-            binaries/linux_amd64/suspicious_txfilter.so.bundle \
+            binaries/suspicious_txfilter_linux_${{ matrix.arch }}.so.bundle \
             - \
-            binaries/linux_amd64/suspicious_txfilter.json \
-            ${{ github.ref_name }} \
-            "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}" \
-            "https://token.actions.githubusercontent.com"
-
-      - name: Create plugin metadata (arm64)
-        run: |
-          go run txfilter/cmd/createmeta/metadata_creator.go \
-            binaries/linux_arm64/suspicious_txfilter.so.bundle \
-            - \
-            binaries/linux_arm64/suspicious_txfilter.json \
+            binaries/suspicious_txfilter_linux_${{ matrix.arch }}.json \
             ${{ github.ref_name }} \
             "https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/${{ github.ref_name }}" \
             "https://token.actions.githubusercontent.com"
 
       - name: Compress plugin binaries
         run: |
-          (cd binaries/linux_amd64 && zip -q - suspicious_txfilter.so suspicious_txfilter.so.bundle suspicious_txfilter.json) > suspicious_txfilter-${{ github.ref_name }}-linux-amd64.zip
-          (cd binaries/linux_arm64 && zip -q - suspicious_txfilter.so suspicious_txfilter.so.bundle suspicious_txfilter.json) > suspicious_txfilter-${{ github.ref_name }}-linux-arm64.zip
+          cd binaries && zip -q - \
+            suspicious_txfilter_linux_${{ matrix.arch }}.so \
+            suspicious_txfilter_linux_${{ matrix.arch }}.so.bundle \
+            suspicious_txfilter_linux_${{ matrix.arch }}.json \
+            > ../suspicious_txfilter-${{ github.ref_name }}-linux-${{ matrix.arch }}.zip
 
-      # --- upload all artifacts ---
+      # --- upload artifacts ---
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}-${{ matrix.arch }}
           path: |
             geth-*.zip
             suspicious_txfilter-*.zip
             genesis.zip
             setup.sh
 
+  # Create multi-arch Docker manifest from per-arch images
+  docker-manifest:
+    name: Docker manifest
+    needs: build
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository }}:${{ github.ref_name }} \
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}-amd64 \
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}-arm64
+
   release:
     name: Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Download Artifact
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ${{ github.ref_name }}
           path: artifacts
+          pattern: "${{ github.ref_name }}-*"
+          merge-multiple: true
 
       - name: Create sha256sums.txt
         run: (cd artifacts && sha256sum *) > sha256sums.txt
