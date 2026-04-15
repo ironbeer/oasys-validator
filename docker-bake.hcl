@@ -52,3 +52,13 @@ target "binaries" {
   }
   platforms = split(",", PLATFORMS)
 }
+
+target "plugin-binaries" {
+  dockerfile = "Dockerfile"
+  target = "plugin-binaries"
+  context = "."
+  args = {
+    VERSION = "${GIT_VERSION}"
+  }
+  platforms = split(",", PLATFORMS)
+}

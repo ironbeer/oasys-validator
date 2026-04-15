@@ -51,7 +51,8 @@ jobs:
       - name: Create binaries directory
         run: mkdir ./binaries
 
-      - name: Build and Push
+      - name: Build and push geth + plugin
+        if: startsWith(github.ref_name, 'v')
         uses: docker/bake-action@v6
         env:
           REGISTRY: ghcr.io
@@ -61,13 +62,27 @@ jobs:
           IMAGE_TAGS: ${{ github.ref_name }}
         with:
           files: docker-bake.hcl
-          # Only push Docker image for main releases (v*), not plugin-only releases (plugin-v*)
-          push: ${{ startsWith(github.ref_name, 'v') }}
+          targets: geth,binaries
+          push: true
           set: |
             *.platform=linux/amd64,linux/arm64
             *.cache-from=type=gha
             *.cache-to=type=gha,mode=max
             binaries.output=type=local,dest=./binaries
+
+      - name: Build plugin only
+        if: "!startsWith(github.ref_name, 'v')"
+        uses: docker/bake-action@v6
+        env:
+          GIT_VERSION: ${{ github.ref_name }}
+        with:
+          files: docker-bake.hcl
+          targets: plugin-binaries
+          set: |
+            *.platform=linux/amd64,linux/arm64
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            plugin-binaries.output=type=local,dest=./binaries
 
       # --- geth artifacts (v* only) ---
 
