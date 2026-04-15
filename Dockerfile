@@ -19,10 +19,12 @@ ADD . /go-ethereum
 ENV CGO_CFLAGS="-O -D__BLST_PORTABLE__"
 ENV CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
 RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+RUN cd /go-ethereum && go run build/ci.go plugin
 
 # Binary extraction stage
 FROM scratch as binaries
 COPY --from=builder /go-ethereum/build/bin/geth /geth
+COPY --from=builder /go-ethereum/build/bin/suspicious_txfilter.so /suspicious_txfilter.so
 
 # Final stage
 FROM gcr.io/distroless/base-debian12

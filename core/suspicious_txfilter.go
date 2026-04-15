@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -42,8 +43,9 @@ const (
 	// The suspicious txfilter plugin metadata file name
 	PluginMetadataFileName = "suspicious_txfilter.json"
 
-	// Exported symbol name in the plugin .so.
-	pluginSymbolName = "Plugin"
+	// Exported symbol names in the plugin .so.
+	pluginSymbolName           = "Plugin"
+	pluginBuildFingerprintName = "BuildFingerprint"
 )
 
 var (
@@ -54,6 +56,10 @@ var (
 	// multiple layers and changing many interfaces. Modifying those interfaces
 	// would significantly increase the merge conflict effort.
 	SuspiciousTxfilterGlobal *SuspiciousTxfilter
+
+	// pluginBuildFingerprint is set by -ldflags in build/ci.go doInstall().
+	// It is compared against the plugin's BuildFingerprint to verify build compatibility.
+	pluginBuildFingerprint string
 )
 
 // SuspiciousTxfilterPlugin is the interface that a loaded plugin must implement.
@@ -133,7 +139,72 @@ func (s *SuspiciousTxfilter) IsReady() bool {
 	return true
 }
 
-func (s *SuspiciousTxfilter) VerifyPluginVersion(p *plugin.Plugin) error {
+// verifyPluginIntegrity verifies that the plugin .so file has not been tampered
+// with by checking its Cosign signature bundle against the expected identity.
+func (s *SuspiciousTxfilter) verifyPluginIntegrity(bundle bundle.Bundle, metadata *SuspiciousTxfilterPluginMetadata) error {
+	if s.verifier == nil {
+		return fmt.Errorf("verifier not initialized")
+	}
+
+	pluginPath := s.pluginPath()
+	file, err := os.Open(pluginPath)
+	if err != nil {
+		return fmt.Errorf("failed to open plugin file: %w", err)
+	}
+	defer file.Close()
+
+	artifactPolicy := sigverify.WithArtifact(file)
+
+	if metadata.IsKeyless {
+		// Execute the verification
+		// - WithArtifact: The artifact to verify
+		// - WithCertificateIdentity: The identity of the certificate that signed the artifact
+		if _, err := s.verifier.Verify(&bundle, sigverify.NewPolicy(
+			artifactPolicy,
+			sigverify.WithCertificateIdentity(sigverify.CertificateIdentity{
+				SubjectAlternativeName: sigverify.SubjectAlternativeNameMatcher{
+					SubjectAlternativeName: *metadata.CertificateIdentity,
+				},
+				Issuer: sigverify.IssuerMatcher{
+					Issuer: *metadata.CertificateIssuer,
+				},
+			}),
+		)); err != nil {
+			return fmt.Errorf("failed to verify bundle: %w", err)
+		}
+		return nil
+	}
+
+	if _, err := s.verifier.Verify(&bundle, sigverify.NewPolicy(artifactPolicy, sigverify.WithKey())); err != nil {
+		return fmt.Errorf("failed to verify bundle: %w", err)
+	}
+	return nil
+}
+
+// verifyPluginBuild checks that the plugin was built with the same go.mod,
+// go.sum, Go version, and target OS/ARCH as the main binary.
+func verifyPluginBuild(p *plugin.Plugin) error {
+	if pluginBuildFingerprint == "" {
+		return nil // development build without fingerprint
+	}
+	sym, err := p.Lookup(pluginBuildFingerprintName)
+	if err != nil {
+		log.Warn("Plugin does not export BuildFingerprint, skipping build compatibility check")
+		return nil
+	}
+	pluginFP, ok := sym.(*string)
+	if !ok {
+		return fmt.Errorf("plugin BuildFingerprint has unexpected type: %T", sym)
+	}
+	if *pluginFP != pluginBuildFingerprint {
+		return fmt.Errorf("build fingerprint mismatch: host=%s plugin=%s (rebuild plugin with the same go.sum and Go version)", pluginBuildFingerprint, *pluginFP)
+	}
+	return nil
+}
+
+// verifyPluginVersion checks that the loaded plugin's version matches
+// the version declared in the metadata downloaded from the CDN.
+func (s *SuspiciousTxfilter) verifyPluginVersion(p *plugin.Plugin) error {
 	metadata := s.metadata.Load()
 	if metadata == nil || metadata.Version == "" {
 		return fmt.Errorf("plugin metadata not found")
@@ -297,7 +368,7 @@ func (s *SuspiciousTxfilter) loadPlugin() error {
 		return err
 	}
 
-	if err = s.verifyPlugin(bundle, metadata); err != nil {
+	if err = s.verifyPluginIntegrity(bundle, metadata); err != nil {
 		return err
 	}
 
@@ -306,7 +377,11 @@ func (s *SuspiciousTxfilter) loadPlugin() error {
 		return fmt.Errorf("failed to open plugin: %w", err)
 	}
 
-	if err = s.VerifyPluginVersion(newPlugin); err != nil {
+	if err = verifyPluginBuild(newPlugin); err != nil {
+		return fmt.Errorf("failed to verify plugin build compatibility: %w", err)
+	}
+
+	if err = s.verifyPluginVersion(newPlugin); err != nil {
 		return fmt.Errorf("failed to verify plugin version: %w", err)
 	}
 
@@ -368,46 +443,6 @@ func (s *SuspiciousTxfilter) updateVerifier(metadata *SuspiciousTxfilterPluginMe
 	return nil
 }
 
-func (s *SuspiciousTxfilter) verifyPlugin(bundle bundle.Bundle, metadata *SuspiciousTxfilterPluginMetadata) error {
-	if s.verifier == nil {
-		return fmt.Errorf("verifier not initialized")
-	}
-
-	pluginPath := s.pluginPath()
-	file, err := os.Open(pluginPath)
-	if err != nil {
-		return fmt.Errorf("failed to open plugin file: %w", err)
-	}
-	defer file.Close()
-
-	artifactPolicy := sigverify.WithArtifact(file)
-
-	if metadata.IsKeyless {
-		// Execute the verification
-		// - WithArtifact: The artifact to verify
-		// - WithCertificateIdentity: The identity of the certificate that signed the artifact
-		if _, err := s.verifier.Verify(&bundle, sigverify.NewPolicy(
-			artifactPolicy,
-			sigverify.WithCertificateIdentity(sigverify.CertificateIdentity{
-				SubjectAlternativeName: sigverify.SubjectAlternativeNameMatcher{
-					SubjectAlternativeName: *metadata.CertificateIdentity,
-				},
-				Issuer: sigverify.IssuerMatcher{
-					Issuer: *metadata.CertificateIssuer,
-				},
-			}),
-		)); err != nil {
-			return fmt.Errorf("failed to verify bundle: %w", err)
-		}
-		return nil
-	}
-
-	if _, err := s.verifier.Verify(&bundle, sigverify.NewPolicy(artifactPolicy, sigverify.WithKey())); err != nil {
-		return fmt.Errorf("failed to verify bundle: %w", err)
-	}
-	return nil
-}
-
 func (s *SuspiciousTxfilter) reloadPlugin() (reloaded bool, err error) {
 	// Download the plugin metadata
 	metadataVersion, err := s.fetchPluginMetadata()
@@ -449,7 +484,7 @@ func (s *SuspiciousTxfilter) buildPluginURL(filename string) string {
 		if s.config.ChainID.Cmp(params.OasysTestnetChainConfig.ChainID) == 0 {
 			network = "testnet"
 		}
-		return fmt.Sprintf("https://cdn.%s.oasys.games/suspicious_txfilter/%s_%s_%s%s", network, fileName, osName, osArch, fileExt)
+		return fmt.Sprintf("https://cdn.%s.oasys.games/suspicious_txfilter/%s/%s_%s_%s%s", network, version.WithMeta, fileName, osName, osArch, fileExt)
 	}
 
 	// For testing
