@@ -16,13 +16,12 @@ geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
-	# @$(MAKE) plugin
 
 #? plugin: Build the suspicious txfilter plugin.
-# The plugin must be built with the exact same Go version, build tags, and go.mod as the test binary.
+# Uses build/ci.go to share toolchain setup and build tags with the main binary.
 plugin:
 	@echo "Building suspicious txfilter plugin..."
-	@go build -buildmode=plugin -trimpath -tags urfave_cli_no_docs,ckzg,purego -o ./build/bin/suspicious_txfilter.so txfilter/plugindummy/main.go
+	@$(GORUN) build/ci.go plugin
 	@echo "Plugin built successfully."
 
 #? plugin-test: Build / sign / create metadata for the suspicious txfilter plugin for testing.
