@@ -20,7 +20,11 @@ ENV CGO_CFLAGS="-O -D__BLST_PORTABLE__"
 ENV CGO_CFLAGS_ALLOW="-O -D__BLST_PORTABLE__"
 
 FROM base as geth-builder
-RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+# NOTE: -static is removed because Go's plugin.Open() uses dlopen() internally,
+# which does not work in statically-linked binaries. The final image uses
+# distroless/base-debian12 (glibc included), so dynamic linking works fine.
+# RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
 
 FROM base as plugin-builder
 RUN cd /go-ethereum && go run build/ci.go plugin
