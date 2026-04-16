@@ -27,12 +27,13 @@ FROM base as geth-builder
 RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
 
 FROM base as plugin-builder
-RUN cd /go-ethereum && go run build/ci.go plugin
+ARG PLUGIN_VERSION=""
+RUN cd /go-ethereum && go run build/ci.go plugin \
+    ${PLUGIN_VERSION:+-version "$PLUGIN_VERSION"}
 
 # Binary extraction stages
 FROM scratch as binaries
 COPY --from=geth-builder /go-ethereum/build/bin/geth /geth
-COPY --from=plugin-builder /go-ethereum/build/bin/suspicious_txfilter.so /suspicious_txfilter.so
 
 FROM scratch as plugin-binaries
 COPY --from=plugin-builder /go-ethereum/build/bin/suspicious_txfilter.so /suspicious_txfilter.so
